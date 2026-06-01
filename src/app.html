@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="text-scale" content="scale" />
+		%sveltekit.head%
+		<link rel="preconnect" href="https://fonts.googleapis.com">
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+		<link href="https://fonts.googleapis.com/css2?family=Forum:wght@400;600&display=swap" rel="stylesheet">
+
+		<style>
+			:root {
+			color-scheme: light dark;
+
+			--bg-page:           light-dark(#f5ede0, #1a1225);
+			--bg-dropzone:       light-dark(#ede0cc, #241830);
+			--bg-dropzone-hover: light-dark(#d4b896, #2e1f3e);
+			--border-dropzone:   light-dark(#8b6c42, #7b5ea7);
+			--border-hover:      light-dark(#5c3d1e, #c9a84c);
+			--text-primary:      light-dark(#2c1a0e, #e8d8c0);
+			--btn-bg:            light-dark(#7a3e2e, #7b5ea7);
+			--btn-bg-hover:      light-dark(#5c2a1a, #9b7ec8);
+			--btn-text:          light-dark(#f9f0e3, #f0e6ff);
+			--toggle-bg:         light-dark(#e8d8c0, #2e1f3e);
+			--toggle-border:     light-dark(#8b6c42, #7b5ea7);
+			}
+
+			:root.dark  { color-scheme: dark; }
+			:root.light { color-scheme: light; }
+		</style>
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
