@@ -1,6 +1,22 @@
 import { FoundrySchema } from "./../types/foundry.ts";
 import { PDFDocument } from "pdf-lib";
-import { getFinalTraits, isTraitMarked } from "./foundryScanner.ts";
+import {
+    compileArmorMarked,
+    compileClassFeatures,
+    compileExperiencesMappings,
+    compileHitPointMarks,
+    compileHopeGained,
+    generateDomainCardMappings,
+    getAllClasses,
+    getAllDomains,
+    getArmorFeatures,
+    getFinalTraits,
+    getHopeFeature,
+    getTotalArmor,
+    getTotalEvasion,
+    getTraitModifier,
+    isTraitMarked
+} from "./foundryScanner.ts";
 
 export async function populateOldGus(schema: unknown) {
     try {
@@ -12,9 +28,7 @@ export async function populateOldGus(schema: unknown) {
 
         const templateArrayBuffer = await response.arrayBuffer()
         const pdfDoc = await PDFDocument.load(templateArrayBuffer)
-        console.log(pdfDoc)
         const form = pdfDoc.getForm()
-        console.log(form)
 
         const fieldMappings = {
             'Agility': getFinalTraits(foundrySchema.system, 'agility'),
@@ -23,12 +37,42 @@ export async function populateOldGus(schema: unknown) {
             'Instinct': getFinalTraits(foundrySchema.system, 'instinct'),
             'Presence': getFinalTraits(foundrySchema.system, 'presence'),
             'Knowledge': getFinalTraits(foundrySchema.system, 'knowledge'),
-            'AgilityMarked': isTraitMarked(foundrySchema.system, 'agility'),
-            'StrengthMarked': isTraitMarked(foundrySchema.system, 'strength'),
-            'FinesseMarked': isTraitMarked(foundrySchema.system, 'finesse'),
-            'InstinctMarked': isTraitMarked(foundrySchema.system, 'instinct'),
-            'PresenceMarked': isTraitMarked(foundrySchema.system, 'presence'),
-            'KnowledgeMarked': isTraitMarked(foundrySchema.system, 'knowledge'),
+            'Agility Mark': isTraitMarked(foundrySchema.system, 'agility'),
+            'Strength Mark': isTraitMarked(foundrySchema.system, 'strength'),
+            'Finesse Mark': isTraitMarked(foundrySchema.system, 'finesse'),
+            'Instinct Mark': isTraitMarked(foundrySchema.system, 'instinct'),
+            'Presence Mark': isTraitMarked(foundrySchema.system, 'presence'),
+            'Knowledge Mark': isTraitMarked(foundrySchema.system, 'knowledge'),
+            'Agility Modifiers': getTraitModifier(foundrySchema.system, 'agility'),
+            'Strength Modifiers': getTraitModifier(foundrySchema.system, 'strength'),
+            'Finesse Modifiers': getTraitModifier(foundrySchema.system, 'finesse'),
+            'Instinct Modifiers': getTraitModifier(foundrySchema.system, 'instinct'),
+            'Presence Modifiers': getTraitModifier(foundrySchema.system, 'presence'),
+            'Knowledge Modifiers': getTraitModifier(foundrySchema.system, 'knowledge'),
+            'Ancestry': foundrySchema.items.find(item => item.type === 'ancestry')?.name,
+            'Armor': String(getTotalArmor(foundrySchema.items)),
+            'Armor Base Thresholds': `${foundrySchema.items.find(item => item.type === 'armor')?.system.baseThresholds?.major} / ${foundrySchema.items.find(item => item.type === 'armor')?.system.baseThresholds?.severe}`,
+            'Armor Feature': getArmorFeatures(foundrySchema.items),
+            'Armor Label': foundrySchema.items.find(item => item.type === 'armor')?.name,
+            ...compileArmorMarked(foundrySchema.items),
+            'Base Armor Score': String(foundrySchema.items.find(item => item.type === 'armor')?.system.armor?.max),
+            'Class': getAllClasses(foundrySchema.items),
+            'Class and Subclass Features': compileClassFeatures(foundrySchema.items),
+            'Class Hope Feature': getHopeFeature(foundrySchema.items),
+            'Community': foundrySchema.items.find(item => item.type === 'community')?.name,
+            ...generateDomainCardMappings(foundrySchema.items),
+            'Domains': getAllDomains(foundrySchema.items),
+            'Evasion': String(getTotalEvasion(foundrySchema.system, foundrySchema.items)),
+            ...compileExperiencesMappings(foundrySchema.system),
+            'Gold, Bags': String(foundrySchema.system.gold.bags),
+            'Gold, Chests': String(foundrySchema.system.gold.chests),
+            'Gold, Coins': String(foundrySchema.system.gold.coins),
+            'Gold, Handfuls': String(foundrySchema.system.gold.handfuls),
+            'Gold, Stashed': '',
+            ...compileHopeGained(foundrySchema.system),
+            'Hope Max': String(foundrySchema.system.resources.hope.max ?? 6),
+            ...compileHitPointMarks(foundrySchema.system),
+            // 'Heritage Features':
         }
         console.log(fieldMappings)
     } catch(error) {

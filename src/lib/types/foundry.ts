@@ -16,6 +16,19 @@ export const LevelupSchema = z.looseObject({
     })),
 })
 
+export const EffectChangeSchema = z.looseObject({
+    key: z.string().optional(),
+    type: z.string(),
+    value: z.string().or(z.number()).or(z.looseObject({
+        current: z.number().or(z.string()).or(z.looseObject({
+
+        })).optional(),
+        max: z.number().or(z.string()).or(z.looseObject({
+            
+        })).optional(),
+    })),
+})
+
 export const FoundrySchema = z.looseObject({
     name: z.string(),
     effects: z.array(z.looseObject({
@@ -25,7 +38,37 @@ export const FoundrySchema = z.looseObject({
     items: z.array(z.looseObject({
         name: z.string(),
         type: z.string(),
-        system: z.looseObject({}),
+        effects: z.array(z.looseObject({
+            name: z.string(),
+            description: z.string(),
+            system: z.looseObject({
+                changes: z.array(EffectChangeSchema).optional(),
+            }),
+            disabled: z.boolean().optional(),
+        })),
+        system: z.looseObject({
+            description: z.string(),
+            armor: z.looseObject({
+                current: z.number(),
+                max: z.number(),
+            }).optional(),
+            baseThresholds: z.looseObject({
+                major: z.number(),
+                severe: z.number(),
+            }).optional(),
+            isMultiClass: z.boolean().optional(),
+            identifier: z.string().optional(),
+            multiclassOrigin: z.boolean().optional(),
+            domain: z.string().optional(),
+            inVault: z.boolean().optional(),
+            level: z.number().optional(),
+            loadoutIgnore: z.boolean().optional(),
+            recallCost: z.number().optional(),
+            type: z.string().optional(),
+            domains: z.array(z.string()).optional(),
+            evasion: z.number().optional(),
+            hitPoints: z.number().optional(),
+        }),
     })),
     system: z.looseObject({
         biography: z.looseObject({
@@ -46,7 +89,14 @@ export const FoundrySchema = z.looseObject({
             severe: z.number(),
         }),
         evasion: z.number(),
-        experiences: z.looseObject({}),
+        experiences: z.record(
+            z.string(), // The randomly generated keys
+            z.looseObject({
+                core: z.boolean(),
+                name: z.string(),
+                value: z.union([z.number(), z.string()]),
+            })
+        ),
         gold: z.looseObject({
             bags: z.number(),
             chests: z.number(),
@@ -77,12 +127,15 @@ export const FoundrySchema = z.looseObject({
         resources: z.looseObject({
             hitPoints: z.looseObject({
                 value: z.number(),
+                max: z.number().nullable(),
             }),
             hope: z.looseObject({
                 value: z.number(),
+                max: z.number().nullable(),
             }),
             stress: z.looseObject({
                 value: z.number(),
+                max: z.number().nullable(),
             }),
         }),
         traits: z.looseObject({
@@ -110,3 +163,4 @@ export const FoundrySchema = z.looseObject({
 
 export type Foundry = z.infer<typeof FoundrySchema>;
 export type FoundrySystem = Foundry['system'];
+export type FoundryItem = Foundry['items'];
