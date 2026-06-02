@@ -1,5 +1,21 @@
 import { z } from 'zod';
 
+export const LevelupSchema = z.looseObject({
+    achievements: z.looseObject({
+        domainCards: z.array(z.looseObject({
+            uuid: z.string(),
+        })),
+        experiences: z.looseObject({}),
+        proficiency: z.number().nullable(),
+    }),
+    selections: z.array(z.looseObject({
+        data: z.array(z.string()),
+        optionKey: z.string(),
+        type: z.string(),
+        value: z.number().nullable(),
+    })),
+})
+
 export const FoundrySchema = z.looseObject({
     name: z.string(),
     effects: z.array(z.looseObject({
@@ -42,7 +58,8 @@ export const FoundrySchema = z.looseObject({
                 changed: z.number(),
                 current: z.number(),
             }),
-            levelups: z.looseObject({}),
+            levelups: z.record(z.string(), LevelupSchema),
+            // levelups: z.looseObject({}),
         }),
         proficiency: z.number(),
         resistance: z.looseObject({
@@ -90,3 +107,6 @@ export const FoundrySchema = z.looseObject({
         }),
     }),
 });
+
+export type Foundry = z.infer<typeof FoundrySchema>;
+export type FoundrySystem = Foundry['system'];
