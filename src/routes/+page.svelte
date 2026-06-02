@@ -6,7 +6,7 @@ Game Plan:
 -->
 
 <script lang="ts">
-	import { extractFieldsAndValues } from './../lib/index.ts';
+	import { extractFieldsAndValues, populateOldGus, type Field } from './../lib/index.ts';
     import { fly, slide } from 'svelte/transition';
     type Theme = 'light' | 'dark';
     let theme = $state<Theme>('dark');
@@ -80,24 +80,19 @@ Game Plan:
         if (files) {
             const file = files[0]
             const text = await file.text()
-            console.log(JSON.parse(text))
-            console.log(JSON.parse(text).items)
+            const foundry = JSON.parse(text)
+            populateOldGus(foundry)
         }
     }
 
     async function pdfToJson() {
         if (files) {
-            // const pdfBuffer = await getPdfBuffer(files[0]);
             const file = files[0]
             const pdfBuffer = await file.arrayBuffer()
             if (pdfBuffer) {
                 const formFields = await extractFieldsAndValues(pdfBuffer)
-                // console.log(formFields)
-                // let allEntries = Object.entries(formFields)
-                let sortedEntries = formFields.sort((a,b) => a.name.localeCompare(b.name))
+                let sortedEntries = formFields.sort((a: Field,b: Field) => a.name.localeCompare(b.name))
                 console.log(sortedEntries)
-                // let obj = Object.fromEntries(sortedEntries)
-                // console.log(obj)
             }
         }
     }
