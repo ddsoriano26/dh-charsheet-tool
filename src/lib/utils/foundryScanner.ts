@@ -1,4 +1,11 @@
-import { capitalize, stripHtml, type FoundryItem, type FoundrySystem, type Trait } from "./../index.ts";
+import {
+    capitalize,
+    stripHtml,
+    type FoundryEffectChange,
+    type FoundryItem,
+    type FoundrySystem,
+    type Trait
+} from "./../index.ts";
 
 export function getFinalTraits(
     systemData: FoundrySystem,
@@ -183,6 +190,46 @@ export function getTotalArmor(itemData: FoundryItem) {
     return baseArmor + armorMod
 }
 
+export function getLeveledBaseThresholds(systemData: FoundrySystem, itemData: FoundryItem) {
+    const baseMajor = Number(itemData.find(item => item.type === 'armor')?.system.baseThresholds?.major)
+    const baseSevere = Number(itemData.find(item => item.type === 'armor')?.system.baseThresholds?.severe)
+    const level = systemData.levelData.level.current
+
+    return `${baseMajor + level} / ${baseSevere + level}`
+}
+
+export function getMajorThreshold(systemData: FoundrySystem, itemData: FoundryItem) {
+    let majorThreshold = Number(itemData.find(item => item.type === 'armor')?.system.baseThresholds?.major)
+    const level = systemData.levelData.level.current
+
+    // Apply level modifier
+    majorThreshold += level
+
+    // Apply feature modifiers
+    majorThreshold = calcFeatureMods(itemData, 'system.damageThresholds.major', majorThreshold)
+
+    // Apply domain card modifiers
+    majorThreshold = calcDomainCardMods(itemData, 'system.damageThresholds.major', majorThreshold)
+
+    return majorThreshold
+}
+
+export function getSevereThreshold(systemData: FoundrySystem, itemData: FoundryItem) {
+    let severeThreshold = Number(itemData.find(item => item.type === 'armor')?.system.baseThresholds?.severe)
+    const level = systemData.levelData.level.current
+
+    // Apply level modifier
+    severeThreshold += level
+
+    // Apply feature modifiers
+    severeThreshold = calcFeatureMods(itemData, 'system.damageThresholds.severe', severeThreshold)
+
+    // Apply domain card modifiers
+    severeThreshold = calcDomainCardMods(itemData, 'system.damageThresholds.severe', severeThreshold)
+
+    return severeThreshold
+}
+
 export function getAllClasses(itemData: FoundryItem) {
     const classItems = itemData.filter(item => item.type === 'class')
     
@@ -203,11 +250,13 @@ export function compileClassFeatures(itemData: FoundryItem) {
     const blocks: string[] = []
 
     // --- 1. Identify main class and subclasses ---
-    const mainClass = itemData.find(item => item.type === 'class' && !item.system?.isMultiClass)
-    const secondaryClasses = itemData.filter(item => item.type === 'class' && item.system?.isMultiClass)
+    const allClasses = itemData.filter(item => item.type === 'class')
+    const mainClass = allClasses.find(item => !item.system?.isMultiClass)
+    const secondaryClasses = allClasses.filter(item => item !== mainClass)
 
-    const mainSubclass = itemData.find(item => item.type === 'subclass' && !item.system?.multiclassOrigin)
-    const secondarySubclasses = itemData.filter(item => item.type === 'subclass' && item.system?.multiclassOrigin)
+    const allSubclasses = itemData.filter(item => item.type === 'subclass')
+    const mainSubclass = allSubclasses.find(item => !item.system?.multiclassOrigin)
+    const secondarySubclasses = allSubclasses.filter(item => item !== mainSubclass)
 
     // --- 2. Filter out the specific features ---
     const features = itemData.filter(item => item.type === 'feature')
@@ -277,6 +326,7 @@ export function compileClassFeatures(itemData: FoundryItem) {
     // Secondary classes block
     if (secondaryClassFeatures.length > 0) {
         // Build the combined header for all secondary classes
+        console.log(secondaryClassFeatures)
         const secondaryClassNames = secondaryClasses.length > 0
             ? secondaryClasses.map(secClass => secClass.name).join(' / ').toUpperCase()
             : 'MULTICLASS' // Failsafe if the class item is missing but the features exist
@@ -349,59 +399,17 @@ export function getAllDomains(itemData: FoundryItem) {
     return allDomains.map(domain => capitalize(domain)).join(', ')
 }
 
-function calcEvasionMods(systemData: FoundrySystem) {
+function calcEvasionMods(systemData: FoundrySystem, itemData: FoundryItem) {
     let totalEvasionMod = 0
 
-    // --- SOURCE 1: Level-Up Progression ---
-    const levelups = systemData.levelData?.levelups
-    const currentLevel = systemData.levelData?.level?.current ?? 1
+    // Apply advancements
+    totalEvasionMod += calcLevelUpMods(systemData, 'evasion')
 
-    if (levelups) {
-        for (let lvl = 2; lvl <= currentLevel; lvl++) {
-            const levelKey = String(lvl)
-            const levelupData = levelups[levelKey]
+    // Apply features
+    totalEvasionMod = calcFeatureMods(itemData, 'system.evasion', totalEvasionMod)
 
-            if (levelupData && Array.isArray(levelupData.selections)) {
-                levelupData.selections.forEach(selection => {
-                    // Check if the top-level selection is flagged as an evasion upgrade
-                    if (selection?.type === 'evasion') {
-                        const parsedValue = Number(selection.value ?? 0);
-                        if (!isNaN(parsedValue)) {
-                            totalEvasionMod += parsedValue;
-                        }
-                    }
-
-                    // Failsafe: Just in case the evasion choice is buried one layer deeper
-                    // in a sub-selection array (similar to how Traits are stored)
-                    if (Array.isArray(selection?.selections)) {
-                        selection.selections.forEach(subSelection => {
-                            if (subSelection?.type === 'evasion') {
-                                const parsedValue = Number(subSelection.value ?? 0);
-                                if (!isNaN(parsedValue)) {
-                                    totalEvasionMod += parsedValue;
-                                }
-                            }
-                        });
-                    }
-                })
-            }
-        }
-    }
-
-    // --- FUTURE SOURCES GO HERE ---
-    // Example: Active effects on items (similar to how armor works)
-    // 
-    // const items = characterData.items ?? [];
-    // items.forEach(item => {
-    //     item.effects?.forEach(effect => {
-    //         if (effect.disabled) return;
-    //         effect.system?.changes?.forEach(change => {
-    //             if (change.key === 'system.evasion' || change.key === 'evasionBonus') {
-    //                 totalEvasionMod += Number(change.value ?? 0);
-    //             }
-    //         });
-    //     });
-    // });
+    // Apply domain cards
+    totalEvasionMod = calcDomainCardMods(itemData, 'system.evasion', totalEvasionMod)
 
     return totalEvasionMod
 }
@@ -409,7 +417,7 @@ function calcEvasionMods(systemData: FoundrySystem) {
 export function getTotalEvasion(systemData: FoundrySystem, itemData: FoundryItem) {
     const mainClass = itemData.find(item => item.type === 'class' && !item.system.isMultiClass)
     const baseEvasion = mainClass?.system?.evasion ? mainClass.system.evasion : 0
-    const evasionMod = calcEvasionMods(systemData)
+    const evasionMod = calcEvasionMods(systemData, itemData)
     return baseEvasion + evasionMod
 }
 
@@ -526,4 +534,222 @@ export function compileHitPointMarks(systemData: FoundrySystem) {
     }
 
     return mappings
+}
+
+export function compileHeritageFeatures(itemsData: FoundryItem) {
+    const ancestryLines: string[] = []
+    const communityLines: string[] = []
+
+    // --- 1. Process Ancestry ---
+    const ancestryItem = itemsData.find(item => item.type === 'ancestry')
+
+    if (ancestryItem) {
+        ancestryLines.push(`Ancestry: ${ancestryItem.name ?? 'Unknown'}`)
+
+        // Find primary feature
+        const primaryFeature = itemsData.find(item =>
+            item.type === 'feature' &&
+            item.system?.originItemType === 'ancestry' &&
+            item.system?.identifier === 'primary'
+        )
+
+        if (primaryFeature) {
+            ancestryLines.push(`${primaryFeature.name}: ${stripHtml(primaryFeature.system.description)}`)
+        }
+
+        // Find secondary feature
+        const secondaryFeature = itemsData.find(item =>
+            item.type === 'feature' &&
+            item.system?.originItemType === 'ancestry' &&
+            item.system?.identifier === 'secondary'
+        )
+
+        if (secondaryFeature) {
+            ancestryLines.push(`${secondaryFeature.name}: ${stripHtml(secondaryFeature.system.description)}`)
+        }
+    }
+
+    // --- 2. Process Community ---
+    const communityItem = itemsData.find(item => item.type === 'community')
+
+    if (communityItem) {
+        communityLines.push(`Community: ${communityItem?.name ?? 'Unknown'}`)
+
+        if (communityItem.system?.description) {
+            communityLines.push(`${communityItem.name}: ${stripHtml(communityItem.system?.description)}`)
+        }
+    }
+
+    // --- 3. Assemble final output ---
+    const finalBlocks: string[] = []
+
+    if (ancestryLines.length > 0) {
+        finalBlocks.push(ancestryLines.join('\n'))
+    }
+
+    if (communityLines.length > 0) {
+        finalBlocks.push(communityLines.join('\n'))
+    }
+
+    return finalBlocks.join('\n\n')
+}
+
+function calcHpMods(systemData: FoundrySystem, itemData: FoundryItem) {
+    let totalHpMod = 0
+
+    // Apply advancements
+    totalHpMod += calcLevelUpMods(systemData, 'hitPoint')
+
+    // Apply features
+    // totalHpMod = calcFeatureMods(itemData, 'system.resources.hitPoints.max', totalHpMod)
+
+    // Apply domain cards
+    totalHpMod = calcDomainCardMods(itemData, 'system.resources.hitPoints.max', totalHpMod)
+
+    return totalHpMod
+}
+
+function calcLevelUpMods(systemData: FoundrySystem, selectionType: string) {
+    let totalMods = 0
+
+    const levelups = systemData?.levelData?.levelups
+    const currentLevel = systemData.levelData?.level?.current ?? 1
+
+    if (levelups) {
+        for (let lvl = 2; lvl <= currentLevel; lvl++) {
+            const levelKey = String(lvl)
+            const levelupData = levelups[levelKey]
+
+            if (levelupData && Array.isArray(levelupData.selections)) {
+                levelupData.selections.forEach(selection => {
+                    // Check if the top-level selection is flagged as an HP upgrade
+                    if (selection?.type === selectionType) {
+                        const parsedValue = Number(selection.value ?? 0);
+                        if (!isNaN(parsedValue)) {
+                            totalMods += parsedValue;
+                        }
+                    }
+
+                    // Failsafe: Just in case the HP choice is buried one layer deeper
+                    // in a sub-selection array (similar to how Traits are stored)
+                    if (Array.isArray(selection?.selections)) {
+                        selection.selections.forEach(subSelection => {
+                            if (subSelection?.type === selectionType) {
+                                const parsedValue = Number(subSelection.value ?? 0);
+                                if (!isNaN(parsedValue)) {
+                                    totalMods += parsedValue;
+                                }
+                            }
+                        });
+                    }
+                })
+            }
+        }
+    }
+
+    return totalMods
+}
+
+function calcDomainCardMods(itemData: FoundryItem, resourceKey: string, currentTotal: number) {
+    let runningTotal = currentTotal
+
+    const domainCards = itemData.filter(item => item.type === 'domainCard')
+
+    domainCards.forEach(card => {
+        // 1. Determine if the card is affecting the player right now
+        const isEquipped = card.system?.inVault === false
+        const isPermanentlyActive = card.system?.inVault === true && card.system?.vaultActive === true
+
+        if (isEquipped || isPermanentlyActive) {
+            // Loop through the active effects
+            if (Array.isArray(card.effects)) {
+                card.effects.forEach(effect => {
+                    // Skip if the effect is explicitly turned off
+                    if (effect.disabled === true) return
+
+                    const changes = effect.system?.changes
+
+                    if (Array.isArray(changes)) {
+                        changes.forEach(change => {
+                            runningTotal = applyEffectChange(change, resourceKey, runningTotal)
+                        })
+                    }
+                })
+            }
+        }
+    })
+
+    return runningTotal
+}
+
+export function getTotalHp(systemData: FoundrySystem, itemData: FoundryItem) {
+    const mainClass = itemData.find(item => item.type === 'class' && !item.system.isMultiClass)
+    const baseHp = mainClass?.system?.hitPoints ?? 0
+    const hpMod = calcHpMods(systemData, itemData)
+    return baseHp + hpMod
+}
+
+export function getInventory(itemData: FoundryItem) {
+    const inventory = itemData
+                        .filter(item => item.type === 'consumable' || item.type === 'loot')
+                        .map(item => item.name)
+    return inventory.join('\n')
+}
+
+function calcFeatureMods(itemData: FoundryItem, resourceKey: string, currentTotal: number) {
+    let runningTotal = currentTotal
+
+    const features = itemData.filter(item => item.type === 'feature')
+
+    features.forEach(feature => {
+        if (Array.isArray(feature.effects)) {
+            feature.effects.forEach(effect => {
+                // Skip if the effect itself is explicitly turned off
+                if (effect.disabled === true) return
+
+                const changes = effect.system?.changes
+
+                if (Array.isArray(changes)) {
+                    changes.forEach(change => {
+                        runningTotal = applyEffectChange(change, resourceKey, runningTotal)
+                    })
+                }
+            })
+        }
+    })
+
+    return runningTotal
+}
+
+function applyEffectChange(change: FoundryEffectChange, resourceKey: string, currentTotal: number) {
+    // 1. If the key doesn't match the target, return the total unchanged
+    if (change.key !== resourceKey) return currentTotal
+
+    // 2. Extract the numeric value safely
+    const rawValue = change.value
+    const mathValue = Number(
+        typeof rawValue === 'object' && rawValue !== null
+            ? (rawValue.max ?? rawValue.current ?? 0)
+            : rawValue
+    )
+
+    // 3. If the value is invalid, bail out and return the total unchanged
+    if (isNaN(mathValue)) return currentTotal
+
+    // 4. Determine the operation (coerced to string for safe switch matching)
+    const opType = String(change.type ?? 'add')
+
+    // 5. Apply the math and return the new result
+    switch (opType) {
+        case 'add':
+            return currentTotal + mathValue
+        case 'subtract':
+            return currentTotal - mathValue
+        case 'multiply':
+            return currentTotal * mathValue
+        case 'override':
+            return mathValue
+        default:
+            return currentTotal + mathValue
+    }
 }

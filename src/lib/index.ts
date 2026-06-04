@@ -7,6 +7,9 @@ export {
     isTraitMarked,
     compileArmorMarked,
     getTotalArmor,
+    getLeveledBaseThresholds,
+    getMajorThreshold,
+    getSevereThreshold,
     getAllClasses,
     compileClassFeatures,
     getHopeFeature,
@@ -15,6 +18,9 @@ export {
     compileExperiencesMappings,
     compileHopeGained,
     compileHitPointMarks,
+    compileHeritageFeatures,
+    getTotalHp,
+    getInventory,
 } from './utils/foundryScanner.ts';
 export {
     capitalize,
@@ -23,5 +29,10 @@ export {
 
 export { FoundrySchema } from './types/foundry.ts';
 
-export type { Foundry, FoundrySystem, FoundryItem }  from './types/foundry.ts';
-export type { Field, Trait } from './types/oldGus.ts';
+export type {
+    Foundry,
+    FoundrySystem,
+    FoundryItem,
+    FoundryEffectChange
+}  from './types/foundry.ts';
+export type { Field, Trait, SubclassUnlockState } from './types/oldGus.ts';

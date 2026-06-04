@@ -13,6 +13,10 @@ export const LevelupSchema = z.looseObject({
         optionKey: z.string(),
         type: z.string(),
         value: z.number().nullable(),
+        secondaryData: z.looseObject({
+            featureState: z.string().optional(),
+            isMulticlass: z.string().optional(),
+        }).optional(),
     })),
 })
 
@@ -27,6 +31,7 @@ export const EffectChangeSchema = z.looseObject({
             
         })).optional(),
     })),
+    disabled: z.boolean().optional(),
 })
 
 export const FoundrySchema = z.looseObject({
@@ -61,6 +66,7 @@ export const FoundrySchema = z.looseObject({
             multiclassOrigin: z.boolean().optional(),
             domain: z.string().optional(),
             inVault: z.boolean().optional(),
+            vaultActive: z.boolean().optional(),
             level: z.number().optional(),
             loadoutIgnore: z.boolean().optional(),
             recallCost: z.number().optional(),
@@ -68,6 +74,7 @@ export const FoundrySchema = z.looseObject({
             domains: z.array(z.string()).optional(),
             evasion: z.number().optional(),
             hitPoints: z.number().optional(),
+            originItemType: z.string().nullable().optional(),
         }),
     })),
     system: z.looseObject({
@@ -164,3 +171,4 @@ export const FoundrySchema = z.looseObject({
 export type Foundry = z.infer<typeof FoundrySchema>;
 export type FoundrySystem = Foundry['system'];
 export type FoundryItem = Foundry['items'];
+export type FoundryEffectChange = z.infer<typeof EffectChangeSchema>;

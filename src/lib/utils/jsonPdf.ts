@@ -4,6 +4,7 @@ import {
     compileArmorMarked,
     compileClassFeatures,
     compileExperiencesMappings,
+    compileHeritageFeatures,
     compileHitPointMarks,
     compileHopeGained,
     generateDomainCardMappings,
@@ -12,8 +13,13 @@ import {
     getArmorFeatures,
     getFinalTraits,
     getHopeFeature,
+    getInventory,
+    getLeveledBaseThresholds,
+    getMajorThreshold,
+    getSevereThreshold,
     getTotalArmor,
     getTotalEvasion,
+    getTotalHp,
     getTraitModifier,
     isTraitMarked
 } from "./foundryScanner.ts";
@@ -51,7 +57,7 @@ export async function populateOldGus(schema: unknown) {
             'Knowledge Modifiers': getTraitModifier(foundrySchema.system, 'knowledge'),
             'Ancestry': foundrySchema.items.find(item => item.type === 'ancestry')?.name,
             'Armor': String(getTotalArmor(foundrySchema.items)),
-            'Armor Base Thresholds': `${foundrySchema.items.find(item => item.type === 'armor')?.system.baseThresholds?.major} / ${foundrySchema.items.find(item => item.type === 'armor')?.system.baseThresholds?.severe}`,
+            'Armor Base Thresholds': getLeveledBaseThresholds(foundrySchema.system, foundrySchema.items),
             'Armor Feature': getArmorFeatures(foundrySchema.items),
             'Armor Label': foundrySchema.items.find(item => item.type === 'armor')?.name,
             ...compileArmorMarked(foundrySchema.items),
@@ -72,7 +78,13 @@ export async function populateOldGus(schema: unknown) {
             ...compileHopeGained(foundrySchema.system),
             'Hope Max': String(foundrySchema.system.resources.hope.max ?? 6),
             ...compileHitPointMarks(foundrySchema.system),
-            // 'Heritage Features':
+            'Heritage Features': compileHeritageFeatures(foundrySchema.items),
+            'HP Max': String(getTotalHp(foundrySchema.system, foundrySchema.items)),
+            'Inventory': getInventory(foundrySchema.items),
+            'Inventory (Continued)': '',
+            'Level': String(foundrySchema.system.levelData.level.current),
+            'Major Damage Threshold': String(getMajorThreshold(foundrySchema.system, foundrySchema.items)),
+            'Severe Damage Threshold': String(getSevereThreshold(foundrySchema.system, foundrySchema.items)),
         }
         console.log(fieldMappings)
     } catch(error) {
