@@ -21,6 +21,14 @@ export {
     compileHeritageFeatures,
     getTotalHp,
     getInventory,
+    getNotes,
+    compileProficiencyMarks,
+    getTierFromLevel,
+    getSpellcastTrait,
+    calcStressMods,
+    compileStressMarks,
+    getAllSubclasses,
+    compileAdvancementMappings,
 } from './utils/foundryScanner.ts';
 export {
     capitalize,
@@ -33,6 +41,13 @@ export type {
     Foundry,
     FoundrySystem,
     FoundryItem,
-    FoundryEffectChange
+    FoundryEffectChange,
+    LevelUpSelections,
+    FoundryItemSingle,
+    LevelSchema,
 }  from './types/foundry.ts';
-export type { Field, Trait, SubclassUnlockState } from './types/oldGus.ts';
+export type {
+    Field,
+    Trait,
+    SubclassUnlockState
+} from './types/oldGus.ts';

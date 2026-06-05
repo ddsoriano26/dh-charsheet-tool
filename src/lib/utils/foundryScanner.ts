@@ -3,7 +3,11 @@ import {
     stripHtml,
     type FoundryEffectChange,
     type FoundryItem,
+    type FoundryItemSingle,
     type FoundrySystem,
+    type LevelSchema,
+    type LevelUpSelections,
+    type SubclassUnlockState,
     type Trait
 } from "./../index.ts";
 
@@ -149,12 +153,18 @@ export function compileArmorMarked(itemData: FoundryItem) {
     return mappings
 }
 
-function calcArmorMods(itemData: FoundryItem) {
+function calcArmorMods(systemData: FoundrySystem, itemData: FoundryItem) {
     let totalArmorMod = 0
+
+    // 1. Grab the unlock state
+    const unlockedTiers = getUnlockedSubclassTiers(systemData)
 
     const features = itemData?.filter(item => item.type === 'feature') ?? []
 
     features.forEach(item => {
+        // 2. Subclass unlock check
+        if (!isSubclassUnlocked(item, unlockedTiers)) return
+
         item.effects?.forEach(effect => {
             if (effect.disabled === true) return
 
@@ -184,9 +194,9 @@ function calcArmorMods(itemData: FoundryItem) {
     return totalArmorMod
 }
 
-export function getTotalArmor(itemData: FoundryItem) {
+export function getTotalArmor(systemData: FoundrySystem, itemData: FoundryItem) {
     const baseArmor = Number(itemData.find(item => item.type === 'armor')?.system.armor?.max)
-    const armorMod = calcArmorMods(itemData)
+    const armorMod = calcArmorMods(systemData, itemData)
     return baseArmor + armorMod
 }
 
@@ -206,7 +216,7 @@ export function getMajorThreshold(systemData: FoundrySystem, itemData: FoundryIt
     majorThreshold += level
 
     // Apply feature modifiers
-    majorThreshold = calcFeatureMods(itemData, 'system.damageThresholds.major', majorThreshold)
+    majorThreshold = calcFeatureMods(systemData, itemData, 'system.damageThresholds.major', majorThreshold)
 
     // Apply domain card modifiers
     majorThreshold = calcDomainCardMods(itemData, 'system.damageThresholds.major', majorThreshold)
@@ -222,7 +232,7 @@ export function getSevereThreshold(systemData: FoundrySystem, itemData: FoundryI
     severeThreshold += level
 
     // Apply feature modifiers
-    severeThreshold = calcFeatureMods(itemData, 'system.damageThresholds.severe', severeThreshold)
+    severeThreshold = calcFeatureMods(systemData, itemData, 'system.damageThresholds.severe', severeThreshold)
 
     // Apply domain card modifiers
     severeThreshold = calcDomainCardMods(itemData, 'system.damageThresholds.severe', severeThreshold)
@@ -246,7 +256,7 @@ export function getAllClasses(itemData: FoundryItem) {
     return [mainClassName, ...secondaryClassNames].join(' / ')
 }
 
-export function compileClassFeatures(itemData: FoundryItem) {
+export function compileClassFeatures(systemData: FoundrySystem, itemData: FoundryItem) {
     const blocks: string[] = []
 
     // --- 1. Identify main class and subclasses ---
@@ -258,24 +268,31 @@ export function compileClassFeatures(itemData: FoundryItem) {
     const mainSubclass = allSubclasses.find(item => !item.system?.multiclassOrigin)
     const secondarySubclasses = allSubclasses.filter(item => item !== mainSubclass)
 
-    // --- 2. Filter out the specific features ---
+    // --- 2. Calculate tier/level-up unlocks ---
+    const unlockedTiers = getUnlockedSubclassTiers(systemData)
     const features = itemData.filter(item => item.type === 'feature')
 
-    // Class features
+    // --- 3. Filter standard class features ---
     const mainClassFeatures = features.filter(feature => feature.system?.identifier === 'class' && !feature.system?.multiclassOrigin)
     const secondaryClassFeatures = features.filter(feature => feature.system?.identifier === 'class' && feature.system?.multiclassOrigin)
 
-    // Subclass features
+    // --- 4. Filter subclass features ---
     const subclassTiers = ['foundation', 'specialization', 'mastery']
 
     const mainSubclassFeatures = features.filter(feature =>
-        feature.system?.identifier && subclassTiers.includes(feature.system.identifier) && !feature.system?.multiclassOrigin
+        feature.system?.identifier &&
+        subclassTiers.includes(feature.system.identifier) &&
+        !feature.system?.multiclassOrigin &&
+        isSubclassUnlocked(feature, unlockedTiers)
     )
     const secondarySubclassFeatures = features.filter(feature =>
-        feature.system?.identifier && subclassTiers.includes(feature.system.identifier) && feature.system?.multiclassOrigin
+        feature.system?.identifier &&
+        subclassTiers.includes(feature.system.identifier) &&
+        feature.system?.multiclassOrigin === true &&
+        isSubclassUnlocked(feature, unlockedTiers)
     )
 
-    // --- 3. Helper: Build subclass tiers ---
+    // --- 5. Helper: Build subclass tiers ---
     const buildSubclassBlock = (subclassNames: string[], subFeatures: FoundryItem) => {
         if (subFeatures.length === 0) return
 
@@ -308,7 +325,7 @@ export function compileClassFeatures(itemData: FoundryItem) {
         }
     }
 
-    // --- 4. Assemble the Output ---
+    // --- 6. Assemble the Output ---
 
     // Main class block
     if (mainClassFeatures.length > 0) {
@@ -326,7 +343,6 @@ export function compileClassFeatures(itemData: FoundryItem) {
     // Secondary classes block
     if (secondaryClassFeatures.length > 0) {
         // Build the combined header for all secondary classes
-        console.log(secondaryClassFeatures)
         const secondaryClassNames = secondaryClasses.length > 0
             ? secondaryClasses.map(secClass => secClass.name).join(' / ').toUpperCase()
             : 'MULTICLASS' // Failsafe if the class item is missing but the features exist
@@ -406,7 +422,7 @@ function calcEvasionMods(systemData: FoundrySystem, itemData: FoundryItem) {
     totalEvasionMod += calcLevelUpMods(systemData, 'evasion')
 
     // Apply features
-    totalEvasionMod = calcFeatureMods(itemData, 'system.evasion', totalEvasionMod)
+    totalEvasionMod = calcFeatureMods(systemData, itemData, 'system.evasion', totalEvasionMod)
 
     // Apply domain cards
     totalEvasionMod = calcDomainCardMods(itemData, 'system.evasion', totalEvasionMod)
@@ -601,7 +617,7 @@ function calcHpMods(systemData: FoundrySystem, itemData: FoundryItem) {
     totalHpMod += calcLevelUpMods(systemData, 'hitPoint')
 
     // Apply features
-    // totalHpMod = calcFeatureMods(itemData, 'system.resources.hitPoints.max', totalHpMod)
+    totalHpMod = calcFeatureMods(systemData, itemData, 'system.resources.hitPoints.max', totalHpMod)
 
     // Apply domain cards
     totalHpMod = calcDomainCardMods(itemData, 'system.resources.hitPoints.max', totalHpMod)
@@ -696,12 +712,24 @@ export function getInventory(itemData: FoundryItem) {
     return inventory.join('\n')
 }
 
-function calcFeatureMods(itemData: FoundryItem, resourceKey: string, currentTotal: number) {
+function calcFeatureMods(
+    systemData: FoundrySystem,
+    itemData: FoundryItem,
+    resourceKey: string,
+    currentTotal: number
+){
     let runningTotal = currentTotal
+
+    // 1. Grab the unlock state
+    const unlockedTiers = getUnlockedSubclassTiers(systemData)
 
     const features = itemData.filter(item => item.type === 'feature')
 
     features.forEach(feature => {
+        // 2. Subclass unlock check
+        if (!isSubclassUnlocked(feature, unlockedTiers)) return
+
+        // 3. Process the math effects if it passes the check
         if (Array.isArray(feature.effects)) {
             feature.effects.forEach(effect => {
                 // Skip if the effect itself is explicitly turned off
@@ -719,6 +747,25 @@ function calcFeatureMods(itemData: FoundryItem, resourceKey: string, currentTota
     })
 
     return runningTotal
+}
+
+function isSubclassUnlocked(
+    feature: FoundryItemSingle,
+    unlockedTiers: { main: SubclassUnlockState, secondary: SubclassUnlockState },
+){
+    const identifier = feature.system?.identifier as keyof SubclassUnlockState
+
+    // 1. If it's not a subclass feature at all, it passes automatically
+    if (identifier !== 'foundation' && identifier !== 'specialization' && identifier !== 'mastery') return true
+
+    // 2. Check the unlock state based on its origin
+    const isSecondary = feature.system?.multiclassOrigin === true
+
+    if (isSecondary) {
+        return !!unlockedTiers.secondary[identifier]
+    } else {
+        return !!unlockedTiers.main[identifier]
+    }
 }
 
 function applyEffectChange(change: FoundryEffectChange, resourceKey: string, currentTotal: number) {
@@ -752,4 +799,261 @@ function applyEffectChange(change: FoundryEffectChange, resourceKey: string, cur
         default:
             return currentTotal + mathValue
     }
+}
+
+export function getUnlockedSubclassTiers(systemData: FoundrySystem) {
+    let mainAdvances = 0
+    let secondaryAdvances = 0
+
+    const levelups = systemData?.levelData?.levelups
+    const currentLevel = systemData?.levelData?.level?.current ?? 1
+
+    if (levelups) {
+        for (let lvl = 2; lvl <= currentLevel; lvl++) {
+            const levelupData = levelups[String(lvl)]
+            if (levelupData && Array.isArray(levelupData.selections)) {
+                // Helper to check advancement type
+                const processSelection = (selection: LevelUpSelections) => {
+                    if (selection?.type === 'subclass') {
+                        if (selection.secondaryData?.isMulticlass === "true") {
+                            secondaryAdvances += 1
+                        } else if (selection.secondaryData?.isMulticlass === "false") {
+                            mainAdvances += 1
+                        }
+                    }
+                }
+
+                levelupData.selections.forEach(selection => {
+                    processSelection(selection)
+                })
+            }
+        }
+    }
+
+    return {
+        main: {
+            foundation: true, // Always available if they have the class
+            specialization: mainAdvances >= 1,
+            mastery: mainAdvances >= 2,
+        },
+        secondary: {
+            foundation: true, // Always available if they multiclassed
+            specialization: secondaryAdvances >= 1,
+            mastery: secondaryAdvances >= 2,
+        }
+    }
+}
+
+export function getNotes(systemData: FoundrySystem) {
+    const background = systemData.biography.background
+    const connections = systemData.biography.connections
+    const allNotes: string[] = []
+
+    if (background) {
+        allNotes.push(`BACKGROUND:${replaceHtml(background, '\n')}`)
+    }
+
+    if (connections) {
+        allNotes.push(`CONNECTIONS:${replaceHtml(connections, '\n')}`)
+    }
+
+    return allNotes.join('\n')
+}
+
+function replaceHtml(text: string, replaceChar: string) {
+    return text.replace(/(<[^>]+>)+/g, replaceChar)
+}
+
+export function compileProficiencyMarks(systemData: FoundrySystem) {
+    const mappings: Record<string, boolean> = {}
+    const MAX_PROF_BOXES = 6
+
+    let currentProficiency = getTierFromLevel(systemData.levelData.level.current ?? 1)
+
+    currentProficiency += calcLevelUpMods(systemData, 'proficiency')
+
+    for (let i = 1; i <= MAX_PROF_BOXES; i++) {
+        mappings[`Proficiency ${i}`] = i <= currentProficiency;
+    }
+
+    return mappings
+}
+
+export function getTierFromLevel(level: number) {
+    // Failsafe for invalid/missing data or level 1
+    if (level <= 1) return 1;
+    
+    // Levels 2, 3, and 4
+    if (level <= 4) return 2;
+    
+    // Levels 5, 6, and 7
+    if (level <= 7) return 3;
+    
+    // Levels 8, 9, 10 (and catches any homebrew levels above 10)
+    return 4; 
+}
+
+export function getSpellcastTrait(itemData: FoundryItem) {
+    const mainSubclass = itemData.find(item => item.type === 'subclass' && !item.system.isMultiClass)
+    return capitalize(mainSubclass?.system.spellcastingTrait)
+}
+
+export function calcStressMods(systemData: FoundrySystem, itemData: FoundryItem) {
+    let totalStressMod = 0
+
+    // Apply advancements
+    totalStressMod += calcLevelUpMods(systemData, 'stress')
+
+    // Apply features
+    totalStressMod = calcFeatureMods(systemData, itemData, 'system.resources.stress.max', totalStressMod)
+
+    // Apply domain cards
+    totalStressMod = calcDomainCardMods(itemData, 'system.resources.stress.max', totalStressMod)
+
+    return totalStressMod
+}
+
+export function compileStressMarks(systemData: FoundrySystem) {
+    const mappings: Record<string, boolean> = {}
+    const MAX_STRESS_BOXES = 12
+
+    // Safely extract the value, defaulting to 0 if missing
+    const currentStress = systemData?.resources?.stress.value ?? 0
+
+    for (let i = 1; i <= MAX_STRESS_BOXES; i++) {
+        mappings[`Stress ${i}`] = i <= currentStress;
+    }
+
+    return mappings
+}
+
+export function getAllSubclasses(itemData: FoundryItem) {
+    const subclassItems = itemData.filter(item => item.type === 'subclass')
+    
+    if (subclassItems.length <= 0) return 'No subclass'
+
+    const mainSubclass = subclassItems.find(subclassItem => !subclassItem.system?.isMultiClass)
+    const mainSubclassName = mainSubclass ? mainSubclass.name : subclassItems[0].name
+
+    if (subclassItems.length === 1) return mainSubclassName
+
+    const secondarySubclasses = subclassItems.filter(item => item !== mainSubclass)
+    const secondarySubclassNames = secondarySubclasses.map(item => item.name)
+
+    return [mainSubclassName, ...secondarySubclassNames].join(' / ')
+}
+
+export function compileAdvancementMappings(systemData: FoundrySystem) {
+    const mappings: Record<string, boolean> = {}
+
+    // 1. Initialize slot counters for each tier
+    const tierCounts = {
+        2: {
+            domainCard: 0,
+            evasion: 0,
+            experience: 0,
+            hitPoint: 0,
+            stress: 0,
+            trait: 0,
+            subclass: 0,
+            proficiency: 0,
+            multiclass: 0,
+        },
+        3: {
+            domainCard: 0,
+            evasion: 0,
+            experience: 0,
+            hitPoint: 0,
+            stress: 0,
+            trait: 0,
+            subclass: 0,
+            proficiency: 0,
+            multiclass: 0,
+        },
+        4: {
+            domainCard: 0,
+            evasion: 0,
+            experience: 0,
+            hitPoint: 0,
+            stress: 0,
+            trait: 0,
+            subclass: 0,
+            proficiency: 0,
+            multiclass: 0,
+        },
+    }
+
+    const levelups = systemData?.levelData?.levelups
+
+    if (levelups) {
+        for (const [levelKey, levelupData] of Object.entries(levelups)) {
+            const currentLevel = Number(levelKey)
+            const currentTier = getTierFromLevel(currentLevel)
+
+            if (levelupData && Array.isArray((levelupData as LevelSchema).selections)) {
+                const processSelection = (selection: LevelUpSelections) => {
+                    const type = selection?.type
+                    if (!type) return
+
+                    const targetTier = Number(selection.tier) || currentTier
+
+                    if (targetTier >= 2 && targetTier <= 4) {
+                        const value = selection.value === null || selection.value === undefined ? 1 : Number(selection.value)
+                        const minCost = Number(selection.minCost ?? 1)
+                        const totalSlots = value * minCost
+
+                        const bucket = tierCounts[targetTier as 2 | 3 | 4]
+
+                        // --- The Check Router ---
+                        if (type === 'domainCard') bucket.domainCard += totalSlots
+                        else if (type === 'hitPoint') bucket.hitPoint += totalSlots
+                        else if (type === 'evasion') bucket.evasion += totalSlots
+                        else if (type === 'stress') bucket.stress += totalSlots
+                        else if (type === 'experience') bucket.experience += totalSlots
+                        else if (type === 'trait') bucket.trait += totalSlots
+                        else if (type === 'subclass') bucket.subclass += totalSlots
+                        else if (type === 'proficiency') bucket.proficiency += totalSlots
+                        else if (type === 'multiclass') bucket.multiclass += totalSlots
+                    }
+                }
+
+                levelupData.selections.forEach(selection => {
+                    processSelection(selection)
+                })
+            }
+        }
+    }
+
+    [2, 3, 4].forEach(tier => {
+        const counts = tierCounts[tier as 2 | 3 | 4]
+
+        // Single slot items
+        mappings[`Tier ${tier}, Domain Card`] = counts.domainCard >= 1
+        mappings[`Tier ${tier}, Evasion`] = counts.evasion >= 1
+        mappings[`Tier ${tier}, Experiences`] = counts.experience >= 1
+
+        // Hit point (2 slots)
+        mappings[`Tier ${tier}, Hit Point, Slot 1`] = counts.hitPoint >= 1
+        mappings[`Tier ${tier}, Hit Point, Slot 2`] = counts.hitPoint >= 2
+
+        // Stress (2 slots)
+        mappings[`Tier ${tier}, Stress, Slot 1`] = counts.stress >= 1
+        mappings[`Tier ${tier}, Stress, Slot 2`] = counts.stress >= 2
+
+        // Traits (3 slots)
+        mappings[`Tier ${tier}, Traits, Slot 1`] = counts.trait >= 1
+        mappings[`Tier ${tier}, Traits, Slot 2`] = counts.trait >= 2
+        mappings[`Tier ${tier}, Traits, Slot 3`] = counts.trait >= 3
+
+        // Enhanced subclass and proficiency (Tiers 3 and 4 only)
+        if (tier >= 3) {
+            mappings[`Tier ${tier}, Enhanced Subclass`] = counts.subclass >= 1
+            mappings[`Tier ${tier}, Proficiency`] = counts.proficiency >= 1
+        }
+    })
+
+    // 3. Shared Tier 3-4 multiclassing field
+    mappings[`Tier 3-4, Multiclassing`] = tierCounts[3].multiclass >= 1 || tierCounts[4].multiclass >= 1
+
+    return mappings
 }

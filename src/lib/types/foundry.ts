@@ -1,5 +1,18 @@
 import { z } from 'zod';
 
+export const LevelupSelectionSchema = z.looseObject({
+    data: z.array(z.string()),
+    optionKey: z.string(),
+    type: z.string(),
+    value: z.number().nullable(),
+    secondaryData: z.looseObject({
+        featureState: z.string().optional(),
+        isMulticlass: z.string().optional(),
+    }).optional(),
+    tier: z.number().optional(),
+    minCost: z.number(),
+})
+
 export const LevelupSchema = z.looseObject({
     achievements: z.looseObject({
         domainCards: z.array(z.looseObject({
@@ -8,16 +21,7 @@ export const LevelupSchema = z.looseObject({
         experiences: z.looseObject({}),
         proficiency: z.number().nullable(),
     }),
-    selections: z.array(z.looseObject({
-        data: z.array(z.string()),
-        optionKey: z.string(),
-        type: z.string(),
-        value: z.number().nullable(),
-        secondaryData: z.looseObject({
-            featureState: z.string().optional(),
-            isMulticlass: z.string().optional(),
-        }).optional(),
-    })),
+    selections: z.array(LevelupSelectionSchema),
 })
 
 export const EffectChangeSchema = z.looseObject({
@@ -34,49 +38,70 @@ export const EffectChangeSchema = z.looseObject({
     disabled: z.boolean().optional(),
 })
 
+export const FoundrySingleItem = z.looseObject({
+    name: z.string(),
+    type: z.string(),
+    effects: z.array(z.looseObject({
+        name: z.string(),
+        description: z.string(),
+        system: z.looseObject({
+            changes: z.array(EffectChangeSchema).optional(),
+        }),
+        disabled: z.boolean().optional(),
+    })),
+    system: z.looseObject({
+        description: z.string(),
+        armor: z.looseObject({
+            current: z.number(),
+            max: z.number(),
+        }).optional(),
+        baseThresholds: z.looseObject({
+            major: z.number(),
+            severe: z.number(),
+        }).optional(),
+        isMultiClass: z.boolean().optional(),
+        identifier: z.string().optional(),
+        multiclassOrigin: z.boolean().optional(),
+        domain: z.string().optional(),
+        inVault: z.boolean().optional(),
+        vaultActive: z.boolean().optional(),
+        level: z.number().optional(),
+        loadoutIgnore: z.boolean().optional(),
+        recallCost: z.number().optional(),
+        type: z.string().optional(),
+        domains: z.array(z.string()).optional(),
+        evasion: z.number().optional(),
+        hitPoints: z.number().optional(),
+        originItemType: z.string().nullable().optional(),
+        spellcastingTrait: z.string().optional(),
+        attack: z.looseObject({
+            actionType: z.string(),
+            damage: z.looseObject({
+                direct: z.boolean(),
+                type: z.array(z.string()),
+                value: z.looseObject({
+                    bonus: z.number(),
+                    custom: z.looseObject({
+                        enabled: z.boolean(),
+                        formula: z.string(),
+                    }),
+                    dice: z.string(),
+                    flatMultiplier: z.number(),
+                    multiplier: z.string(),
+                }),
+            }),
+        }).optional(),
+        burden: z.string().optional(),
+    }),
+})
+
 export const FoundrySchema = z.looseObject({
     name: z.string(),
     effects: z.array(z.looseObject({
         name: z.string(),
         description: z.string(),
     })),
-    items: z.array(z.looseObject({
-        name: z.string(),
-        type: z.string(),
-        effects: z.array(z.looseObject({
-            name: z.string(),
-            description: z.string(),
-            system: z.looseObject({
-                changes: z.array(EffectChangeSchema).optional(),
-            }),
-            disabled: z.boolean().optional(),
-        })),
-        system: z.looseObject({
-            description: z.string(),
-            armor: z.looseObject({
-                current: z.number(),
-                max: z.number(),
-            }).optional(),
-            baseThresholds: z.looseObject({
-                major: z.number(),
-                severe: z.number(),
-            }).optional(),
-            isMultiClass: z.boolean().optional(),
-            identifier: z.string().optional(),
-            multiclassOrigin: z.boolean().optional(),
-            domain: z.string().optional(),
-            inVault: z.boolean().optional(),
-            vaultActive: z.boolean().optional(),
-            level: z.number().optional(),
-            loadoutIgnore: z.boolean().optional(),
-            recallCost: z.number().optional(),
-            type: z.string().optional(),
-            domains: z.array(z.string()).optional(),
-            evasion: z.number().optional(),
-            hitPoints: z.number().optional(),
-            originItemType: z.string().nullable().optional(),
-        }),
-    })),
+    items: z.array(FoundrySingleItem),
     system: z.looseObject({
         biography: z.looseObject({
             background: z.string(),
@@ -172,3 +197,6 @@ export type Foundry = z.infer<typeof FoundrySchema>;
 export type FoundrySystem = Foundry['system'];
 export type FoundryItem = Foundry['items'];
 export type FoundryEffectChange = z.infer<typeof EffectChangeSchema>;
+export type LevelUpSelections = z.infer<typeof LevelupSelectionSchema>;
+export type FoundryItemSingle = z.infer<typeof FoundrySingleItem>;
+export type LevelSchema = z.infer<typeof LevelupSchema>;
