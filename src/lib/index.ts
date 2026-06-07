@@ -34,6 +34,7 @@ export {
 export {
     capitalize,
     stripHtml,
+    sanitizeForPdf,
 } from './utils/stringManipulation.ts';
 
 export { FoundrySchema } from './types/foundry.ts';

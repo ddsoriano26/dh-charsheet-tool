@@ -32,6 +32,7 @@ import {
     getTraitModifier,
     isTraitMarked
 } from "./foundryScanner.ts";
+import { sanitizeForPdf } from "./stringManipulation.ts";
 
 export async function populateOldGus(schema: unknown) {
     try {
@@ -150,7 +151,7 @@ export async function generateAndDownload(
                     } else {
                         // Route other string values to text fields; dynamic font scaling
                         const textField = form.getTextField(pdfFieldName)
-                        textField.setText(value)
+                        textField.setText(sanitizeForPdf(value))
                     }
                 }
             } catch (e) {
@@ -170,7 +171,7 @@ export async function generateAndDownload(
         const link = document.createElement('a')
         link.href = downloadUrl
         // Clean up the file name to remove spaces or weird characters
-        const safeName = fileName.replace(/[^a-z0-9]/gi, '_')
+        const safeName = fileName.replace(/[^a-z0-9]/gi, '_').replace(/\.json$/i, "")
         link.download = `${safeName}.pdf`
 
         document.body.appendChild(link)
