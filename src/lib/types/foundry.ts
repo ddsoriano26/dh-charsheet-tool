@@ -78,20 +78,29 @@ export const FoundrySingleItem = z.looseObject({
             actionType: z.string(),
             damage: z.looseObject({
                 direct: z.boolean(),
-                type: z.array(z.string()),
+                type: z.array(z.string()).optional(),
                 value: z.looseObject({
                     bonus: z.number(),
                     custom: z.looseObject({
                         enabled: z.boolean(),
                         formula: z.string(),
                     }),
+                }).optional(),
+            }),
+            roll: z.looseObject({
+                trait: z.string(),
+                type: z.string(),
+                diceRolling: z.looseObject({
                     dice: z.string(),
                     flatMultiplier: z.number(),
                     multiplier: z.string(),
                 }),
             }),
+            range: z.string(),
         }).optional(),
         burden: z.string().optional(),
+        secondary: z.boolean().optional(),
+        equipped: z.boolean().optional(),
     }),
 })
 

@@ -1,6 +1,6 @@
 // Reexport your entry components here
 export { extractFieldsAndValues } from './utils/fileExtractionUtils.ts';
-export { populateOldGus } from './utils/jsonPdf.ts';
+export { populateOldGus, generateAndDownload } from './utils/jsonPdf.ts';
 export {
     getFinalTraits,
     getTraitModifier,
@@ -29,6 +29,7 @@ export {
     compileStressMarks,
     getAllSubclasses,
     compileAdvancementMappings,
+    compileWeaponMappings,
 } from './utils/foundryScanner.ts';
 export {
     capitalize,

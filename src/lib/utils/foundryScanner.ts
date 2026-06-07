@@ -1057,3 +1057,120 @@ export function compileAdvancementMappings(systemData: FoundrySystem) {
 
     return mappings
 }
+
+export function compileWeaponMappings(itemData: FoundryItem) {
+    const mappings: Record<string, string | boolean> = {}
+    const MAX_WEAPONS = 4
+
+    // 1. Isolate and safely sort weapons: Equipped Primary > Equipped Secondary > Unequipped Primary > Uneqipped Secondary
+    const weapons = itemData
+                        .filter(item => item.type === 'weapon')
+                        .sort((a, b) => {
+                            const aEquipped = a.system?.equipped ? 1 : 0
+                            const bEquipped = b.system?.equipped ? 1 : 0
+                            if (aEquipped !== bEquipped) return bEquipped - aEquipped
+
+                            // If equipped status is the same, put primary (secondary === false) first
+                            const aPrimary = a.system?.secondary ? 0 : 1
+                            const bPrimary = b.system?.secondary ? 0 : 1
+                            return bPrimary - aPrimary
+                        })
+
+    // 2. The Hand Allocator state
+    let hand1Taken = false
+    let hand2Taken = false
+
+    // 3. Process up to 4 weapon slots
+    for (let i = 0; i < MAX_WEAPONS; i++) {
+        const weaponOrder = i +1
+        const weapon = weapons[i]
+
+        // Failsafe: Clear out remaining slots if character has fewer than 4 weapons
+        if (!weapon) {
+            mappings[`Weapon ${weaponOrder} Active`] = false
+            mappings[`Weapon ${weaponOrder} Damage and Type`] = ''
+            mappings[`Weapon ${weaponOrder} Feature`] = ''
+            mappings[`Weapon ${weaponOrder} Hand 1`] = false
+            mappings[`Weapon ${weaponOrder} Hand 2`] = false
+            mappings[`Weapon ${weaponOrder} Label`] = ''
+            mappings[`Weapon ${weaponOrder} Trait and Range`] = ''
+            mappings[`Weapon ${weaponOrder} Type`] = ''
+            continue
+        }
+
+        const system = weapon.system || {}
+        const isEquipped = system.equipped === true
+        const isSecondary = system.secondary === true
+        const burden = system.burden
+
+        // --- Hand Allocation Logic ---
+        let weaponHand1 = false
+        let weaponHand2 = false
+
+        if (isEquipped) {
+            if (burden === 'twoHanded' && !hand1Taken && !hand2Taken) {
+                weaponHand1 = true
+                weaponHand2 = true
+                hand1Taken = true
+                hand2Taken = true
+            } else if (burden === 'oneHanded') {
+                if (!isSecondary && !hand1Taken) {
+                    weaponHand1 = true
+                    hand1Taken = true
+                } else if (isSecondary && !hand2Taken) {
+                    weaponHand2 = true
+                    hand2Taken = true
+                }
+            }
+        }
+
+        // --- Damage and Type Logic ---
+        const dmgValue = system.attack?.damage?.value
+        const dice = system.attack?.roll?.diceRolling?.dice
+        const rawBonus = Number(dmgValue?.bonus) || 0
+        const multiplier = system.attack?.roll?.diceRolling?.multiplier
+
+        let bonusStr = ''
+        if (rawBonus > 0) bonusStr += ` + ${rawBonus}`
+        else if (rawBonus < 0) bonusStr += ` - ${Math.abs(rawBonus)}`
+
+        let damageStr = ''
+        if (multiplier === 'prof') {
+            damageStr += `${dice}${bonusStr} proficiency`.trim()
+        } else {
+            const parsedMult = Number(multiplier)
+            const finalMult = isNaN(parsedMult) || parsedMult === 0 ? '1' : String(parsedMult)
+            damageStr += `${finalMult}${dice}${bonusStr}`.trim()
+        }
+
+        const typeArr = Array.isArray(system.attack?.damage?.type) ? system.attack.damage.type: []
+        const typeStr = typeArr.map(type => capitalize(type)).join(', ')
+        const finalDamageAndType = typeStr ? `${damageStr}, ${typeStr}` : damageStr
+
+        // --- Feature logic ---
+        const effectsArr = Array.isArray(weapon.effects) ? weapon.effects : []
+        const featuresStr = effectsArr
+                                .map(effect => `${effect.name}: ${stripHtml(effect.description)}`)
+                                .join('\n')
+
+        // --- Trait and Range logic ---
+        const trait = capitalize(system.attack?.roll?.trait)
+        const range = capitalize(system.attack?.range)
+        let traitAndRange = ''
+        if (trait && range) traitAndRange = `${trait} / ${range}`
+        else if (trait) traitAndRange = trait
+        else if (range) traitAndRange = range
+
+        // --- Mapping Assignments ---
+        mappings[`Weapon ${weaponOrder} Active`] = isEquipped
+        mappings[`Weapon ${weaponOrder} Damage and Type`] = finalDamageAndType
+        mappings[`Weapon ${weaponOrder} Feature`] = featuresStr
+        mappings[`Weapon ${weaponOrder} Hand 1`] = weaponHand1
+        mappings[`Weapon ${weaponOrder} Hand 2`] = weaponHand2
+        mappings[`Weapon ${weaponOrder} Label`] = weapon.name || ''
+        mappings[`Weapon ${weaponOrder} Trait and Range`] = traitAndRange
+        mappings[`Weapon ${weaponOrder} Type`] = isSecondary ? 'Secondary' : 'Primary'
+    }
+
+    return mappings
+}

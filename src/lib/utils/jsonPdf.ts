@@ -11,6 +11,7 @@ import {
     compileHopeGained,
     compileProficiencyMarks,
     compileStressMarks,
+    compileWeaponMappings,
     generateDomainCardMappings,
     getAllClasses,
     getAllDomains,
@@ -35,15 +36,7 @@ import {
 export async function populateOldGus(schema: unknown) {
     try {
         const foundrySchema = FoundrySchema.parse(schema)
-        console.log(foundrySchema)
         
-        const response = await fetch('/old-gus-daggerheart-character-sheet-fillable.pdf')
-        if (!response.ok) throw new Error('Could not fetch the character sheet template.')
-
-        const templateArrayBuffer = await response.arrayBuffer()
-        const pdfDoc = await PDFDocument.load(templateArrayBuffer)
-        const form = pdfDoc.getForm()
-
         const fieldMappings = {
             'Agility': getFinalTraits(foundrySchema.system, 'agility'),
             'Strength': getFinalTraits(foundrySchema.system, 'strength'),
@@ -103,9 +96,90 @@ export async function populateOldGus(schema: unknown) {
             'Subclass': getAllSubclasses(foundrySchema.items),
             'Tier': String(getTierFromLevel(foundrySchema.system.levelData.level.current)),
             ...compileAdvancementMappings(foundrySchema.system),
+            ...compileWeaponMappings(foundrySchema.items),
         }
-        console.log(fieldMappings)
+        return fieldMappings
     } catch(error) {
         console.error(error)
+        return {}
+    }
+}
+
+export async function generateAndDownload(
+    fieldMappings: Record<string, string | boolean>,
+    fileName: string = 'Character'
+){
+    try {
+        // 1. Fetch blank PDF
+        const url = 'old-gus-daggerheart-character-sheet-fillable.pdf'
+        const existingPdfBytes = await fetch(url).then(res => res.arrayBuffer())
+
+        // 2. Load PDF and extract interactive form
+        const pdfDoc = await PDFDocument.load(existingPdfBytes)
+        const form = pdfDoc.getForm()
+
+        // --- PDFRadioGroup interceptor ---
+        const radioGroupKeys = new Set([
+            'Hope Max',
+            'HP Max',
+            'Stress Max',
+            'Weapon 1 Type',
+            'Weapon 2 Type',
+            'Weapon 3 Type',
+            'Weapon 4 Type',
+        ])
+        
+        // 3. Iterate over field mappings and populate the PDF
+        Object.entries(fieldMappings).forEach(([pdfFieldName, value]) => {
+            try {
+                const field = form.getField(pdfFieldName)
+                if (!field || value === undefined) return
+
+                if (typeof value === 'boolean') {
+                    // Route boolean values to checkboxes
+                    const checkBox = form.getCheckBox(pdfFieldName)
+                    if (value) checkBox.check()
+                    else checkBox.uncheck()
+                } else if (typeof value === 'string') {
+                    if (radioGroupKeys.has(pdfFieldName)) {
+                        // Check if this string belongs to a PDFRadioGroup
+                        const radioGroup = form.getRadioGroup(pdfFieldName)
+
+                        if (value === '') radioGroup.clear()
+                        else radioGroup.select(value)
+                    } else {
+                        // Route other string values to text fields; dynamic font scaling
+                        const textField = form.getTextField(pdfFieldName)
+                        textField.setText(value)
+                    }
+                }
+            } catch (e) {
+                // If field name mismatches or doesn't exist, skip safely
+                console.warn(`Could not set field: ${pdfFieldName}`)
+                console.warn(e)
+            }
+        })
+
+        // 4. Save the PDF document into a byte array
+        const pdfBytes = await pdfDoc.save()
+
+        // 5. Trigger browser download
+        const blob = new Blob([pdfBytes as BlobPart], { type: 'application/pdf' })
+        const downloadUrl = window.URL.createObjectURL(blob)
+
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        // Clean up the file name to remove spaces or weird characters
+        const safeName = fileName.replace(/[^a-z0-9]/gi, '_')
+        link.download = `${safeName}.pdf`
+
+        document.body.appendChild(link)
+        link.click()
+
+        // Clean up the DOM and memory
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(downloadUrl)
+    } catch (error) {
+        console.error("Error generating PDF:", error)
     }
 }

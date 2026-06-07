@@ -6,7 +6,12 @@ Game Plan:
 -->
 
 <script lang="ts">
-	import { extractFieldsAndValues, populateOldGus, type Field } from './../lib/index.ts';
+	import {
+        extractFieldsAndValues,
+        populateOldGus,
+        generateAndDownload,
+        type Field
+    } from './../lib/index.ts';
     import { fly, slide } from 'svelte/transition';
     type Theme = 'light' | 'dark';
     let theme = $state<Theme>('dark');
@@ -20,6 +25,7 @@ Game Plan:
     let fileName = $state('');
     let fileExt = $state('');
     let isValid = $state(false);
+    let isGenerating = $state(false);
 
     function toggleTheme() {
         const root = document.documentElement;
@@ -78,10 +84,13 @@ Game Plan:
 
     async function jsonToPdf() {
         if (files) {
+            isGenerating = true
             const file = files[0]
             const text = await file.text()
             const foundry = JSON.parse(text)
-            populateOldGus(foundry)
+            const fieldMappings = await populateOldGus(foundry)
+            await generateAndDownload(fieldMappings, file.name)
+            isGenerating = false
         }
     }
 
@@ -308,7 +317,12 @@ Game Plan:
     <div class="button-container">
         {#if fileExt === "json"}
         <div transition:fly={{ y: 20, duration: 400 }}>
-            <button onclick={jsonToPdf}>Generate Daggerheart Character Sheet</button>
+            <button
+                onclick={jsonToPdf}
+                disabled={isGenerating}
+            >
+                {isGenerating ? 'Forging Sheet...' : 'Generate Daggerheart Character Sheet'}
+            </button>
         </div>
         {:else if fileExt === "pdf"}
         <div transition:fly={{ y: 20, duration: 400 }}>
